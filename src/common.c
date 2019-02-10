@@ -1526,6 +1526,7 @@ str_of_major_format (int format)
 		CASE_NAME (SF_FORMAT_CAF) ;
 		CASE_NAME (SF_FORMAT_WVE) ;
 		CASE_NAME (SF_FORMAT_OGG) ;
+		CASE_NAME (SF_FORMAT_MP3) ;
 		default :
 			break ;
 		} ;
@@ -1562,6 +1563,9 @@ str_of_minor_format (int format)
 		CASE_NAME (SF_FORMAT_DPCM_8) ;
 		CASE_NAME (SF_FORMAT_DPCM_16) ;
 		CASE_NAME (SF_FORMAT_VORBIS) ;
+		CASE_NAME (SF_FORMAT_MPEG_LAYER_I) ;
+		CASE_NAME (SF_FORMAT_MPEG_LAYER_II) ;
+		CASE_NAME (SF_FORMAT_MPEG_LAYER_III) ;
 		default :
 			break ;
 		} ;
