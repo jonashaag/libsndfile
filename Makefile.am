@@ -78,7 +78,7 @@ src_libcommon_la_SOURCES = src/common.c src/file_io.c src/command.c src/pcm.c sr
 	src/float32.c src/double64.c src/ima_adpcm.c src/ms_adpcm.c src/gsm610.c src/dwvw.c src/vox_adpcm.c \
 	src/interleave.c src/strings.c src/dither.c src/cart.c src/broadcast.c src/audio_detect.c \
 	src/ima_oki_adpcm.c src/ima_oki_adpcm.h src/alac.c src/chunk.c src/ogg.c src/chanmap.c \
-	src/windows.c src/id3.c src/nms_adpcm.c $(WIN_VERSION_FILE)
+	src/windows.c src/id3.c src/nms_adpcm.c src/mpeg.c $(WIN_VERSION_FILE)
 
 check_PROGRAMS = src/test_main
 src_test_main_SOURCES = src/test_main.c src/test_main.h src/test_conversions.c src/test_float.c src/test_endswap.c \
