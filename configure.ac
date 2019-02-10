@@ -152,6 +152,9 @@ AC_ARG_ENABLE([alsa],
 AC_ARG_ENABLE([external-libs],
 	[AS_HELP_STRING([--disable-external-libs], [disable use of FLAC, Ogg and Vorbis [[default=no]]])])
 
+AC_ARG_ENABLE([lame],
+	[AS_HELP_STRING([--enable-lame], [disable use of LAME MP3 encoding support (experimental) [[defaults=no]]])])
+
 AC_ARG_ENABLE(octave,
 	[AS_HELP_STRING([--enable-octave], [enable building of GNU Octave module])])
 
@@ -375,6 +378,27 @@ AS_IF([test -n "$PKG_CONFIG"], [
 	])
 
 AC_DEFINE_UNQUOTED([HAVE_EXTERNAL_XIPH_LIBS], [$HAVE_EXTERNAL_XIPH_LIBS], [Will be set to 1 if flac, ogg, vorbis, and opus are available.])
+
+dnl ====================================================================================
+dnl  Check for liblame
+
+HAVE_LAME=0
+
+AS_IF([test "x$enable_experimental$enable_lame" = "xyesyes"], [
+		AC_CHECK_HEADER(lame/lame.h,
+						lame_header_found="yes",
+						lame_header_found="no")
+		AC_SEARCH_LIBS(lame_set_VBR_q, [lame mp3lame], [lame_lib_found="yes"], [lame_lib_found="no"])
+		AS_IF([test "x$lame_lib_found$lame_header_found" = "xyesyes"], [
+				HAVE_LAME=1
+			], [
+				enable_lame="no"
+			])
+	], [
+		enable_lame="no"
+	])
+
+AC_DEFINE_UNQUOTED([HAVE_LAME], [$HAVE_LAME], [Will be set to 1 if lame is available.])
 
 dnl ====================================================================================
 dnl  Check for libsqlite3 (only used in regtest).
@@ -654,6 +678,7 @@ AC_SUBST(GEN_TOOL)
 AC_SUBST(WIN_RC_VERSION)
 
 AC_SUBST(HAVE_EXTERNAL_XIPH_LIBS)
+AC_SUBST(HAVE_LAME)
 AC_SUBST(OS_SPECIFIC_CFLAGS)
 AC_SUBST(OS_SPECIFIC_LINKS)
 AC_SUBST(SNDIO_LIBS)
@@ -705,6 +730,7 @@ AC_MSG_RESULT([
     Experimental code : ................... ${enable_experimental:-no}
     Using ALSA in example programs : ...... ${enable_alsa:-no}
     External FLAC/Ogg/Vorbis/Opus : ....... ${enable_external_libs:-no}
+    External Lame mp3 encoding : .......... ${enable_lame:-no}
     Building Octave interface : ........... ${OCTAVE_BUILD}
 
   Tools :
