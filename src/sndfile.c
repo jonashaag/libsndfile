@@ -870,6 +870,15 @@ sf_format_check	(const SF_INFO *info)
 				if (subformat == SF_FORMAT_FLOAT || subformat == SF_FORMAT_DOUBLE)
 					return 1 ;
 				break ;
+
+		case SF_FORMAT_MP3 :
+				if (info->channels > 2)
+					return 0 ;
+				if (endian != SF_ENDIAN_FILE)
+					return 0 ;
+				if (subformat == SF_FORMAT_MPEG_III)
+					return 1 ;
+				break ;
 		default : break ;
 		} ;
 
@@ -2755,6 +2764,9 @@ guess_file_type (SF_PRIVATE *psf)
 	if (buffer [0] == MAKE_MARKER ('R', 'F', '6', '4') && buffer [2] == MAKE_MARKER ('W', 'A', 'V', 'E'))
 		return SF_FORMAT_RF64 ;
 
+	if ((buffer [0] & MAKE_MARKER (0xFF, 0xFA, 0, 0)) == MAKE_MARKER (0xFF, 0xFA, 0, 0))
+		return SF_FORMAT_MP3 | SF_FORMAT_MPEG_III ;
+
 	if (buffer [0] == MAKE_MARKER ('I', 'D', '3', 3))
 	{	psf_log_printf (psf, "Found 'ID3' marker.\n") ;
 		if (id3_skip (psf))
@@ -3161,6 +3173,10 @@ psf_open_file (SF_PRIVATE *psf, SF_INFO *sfinfo)
 
 		case	SF_FORMAT_MPC2K :
 				error = mpc2k_open (psf) ;
+				break ;
+
+		case	SF_FORMAT_MP3 :
+				error = mpeg_open (psf) ;
 				break ;
 
 		/* Lite remove end */
