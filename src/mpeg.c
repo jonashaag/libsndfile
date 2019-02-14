@@ -31,23 +31,30 @@ typedef struct
 	unsigned char *block ;
 	size_t len ;
 	int max_samp ;
+	struct {
+		float *l ;
+		float *r ;
+	} pcm ;
 } MPEG_PRIVATE ;
 
-typedef int (* mpeg_write_func) (MPEG_PRIVATE *, void const **, const int) ;
 
 static int	mpeg_close (SF_PRIVATE *psf) ;
 static int	mpeg_init (SF_PRIVATE *psf) ;
 static int	mpeg_encoder_construct (SF_PRIVATE *psf) ;
-static sf_count_t	mpeg_write (SF_PRIVATE *psf, const void *ptr, sf_count_t len, mpeg_write_func func) ;
 
-static int	mpeg_write_short_mono (MPEG_PRIVATE *, void const **, const int) ;
-static int	mpeg_write_short_stereo (MPEG_PRIVATE *, void const **, const int) ;
-static int	mpeg_write_int_mono (MPEG_PRIVATE *, void const **, const int) ;
-static int	mpeg_write_int_stereo (MPEG_PRIVATE *, void const **, const int) ;
-static int	mpeg_write_float_mono (MPEG_PRIVATE *, void const **, const int) ;
-static int	mpeg_write_float_stereo (MPEG_PRIVATE *, void const **, const int) ;
-static int	mpeg_write_double_mono (MPEG_PRIVATE *, void const **, const int) ;
-static int	mpeg_write_double_stereo (MPEG_PRIVATE *, void const **, const int) ;
+static void s2mpeg_array_mono (const short *ptr, float *pcm_l, float *pcm_r, int nsamp) ;
+static void s2mpeg_array_stereo (const short *ptr, float *pcm_l, float *pcm_r, int nsamp) ;
+static void i2mpeg_array_mono (const int *ptr, float *pcm_l, float *pcm_r, int nsamp) ;
+static void i2mpeg_array_stereo (const int *ptr, float *pcm_l, float *pcm_r, int nsamp) ;
+static void f2mpeg_array_mono (const float *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm) ;
+static void f2mpeg_array_mono (const float *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm) ;
+static void f2mpeg_array_stereo (const float *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm) ;
+static void f2mpeg_array_mono_clip (const float *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm) ;
+static void f2mpeg_array_stereo_clip (const float *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm) ;
+static void d2mpeg_array_mono (const double *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm) ;
+static void d2mpeg_array_stereo (const double *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm) ;
+static void d2mpeg_array_mono_clip (const double *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm) ;
+static void d2mpeg_array_stereo_clip (const double *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm) ;
 
 static sf_count_t	mpeg_write_s (SF_PRIVATE *psf, const short *ptr, sf_count_t len) ;
 static sf_count_t	mpeg_write_i (SF_PRIVATE *psf, const int *ptr, sf_count_t len) ;
@@ -107,9 +114,10 @@ mpeg_close (SF_PRIVATE *psf)
 			psf_fwrite (buffer, 1, ret, psf) ;
 
 		/*
-		** If possible, seek back and write the LAME/XING/Info header. This
+		** If possible, seek back and write the LAME/XING/Info headers. This
 		** contains information about the whole file and a seek table, and can
 		** only be written after encodeing.
+		**
 		** If enabled, Lame wrote an empty header at the begining of the data
 		** that we now fill in.
 		*/
@@ -131,12 +139,19 @@ mpeg_close (SF_PRIVATE *psf)
 				} ;
 			} ;
 		free (buffer) ;
+
 		free (pmpeg->block) ;
 		pmpeg->block = NULL ;
+
 		if (pmpeg->lamef)
 		{	lame_close (pmpeg->lamef) ;
 			pmpeg->lamef = NULL ;
 			} ;
+
+		free (pmpeg->pcm.l) ;
+		pmpeg->pcm.l = NULL ;
+		free (pmpeg->pcm.r) ;
+		pmpeg->pcm.r = NULL ;
 		} ;
 
 	return 0 ;
@@ -173,7 +188,7 @@ mpeg_init (SF_PRIVATE *psf)
 		lame_set_write_id3tag_automatic (pmpeg->lamef, 0) ;
 
 		if (psf->is_pipe)
-		{	/* Can't seek, so force disable Xing/Lame header. */
+		{	/* Can't seek back, so force disable Xing/Lame/Info header. */
 			lame_set_bWriteVbrTag (pmpeg->lamef, 0) ;
 			} ;
 
@@ -207,157 +222,303 @@ mpeg_encoder_construct (SF_PRIVATE *psf)
 		return SFE_MALLOC_FAILED ;
 
 	pmpeg->max_samp = lame_get_maximum_number_of_samples (
-			pmpeg->lamef, pmpeg->len) * psf->sf.channels ;
+			pmpeg->lamef, pmpeg->len) ;
+
+	pmpeg->pcm.l = (float *) malloc (sizeof (float) * pmpeg->max_samp) ;
+	if (pmpeg->pcm.l == NULL)
+		return SFE_MALLOC_FAILED ;
+
+	if (psf->sf.channels == 2)
+	{	pmpeg->pcm.r = (float *) malloc (sizeof (float) * pmpeg->max_samp) ;
+		if (pmpeg->pcm.r == NULL)
+			return SFE_MALLOC_FAILED ;
+		} ;
 
 	return 0 ;
 } /* mpeg_encoder_construct */
 
+static void
+s2mpeg_array_mono (const short *ptr, float *pcm_l, float * UNUSED (pcm_r), int nsamp)
+{	while (nsamp--)
+		*pcm_l++ = *ptr++ ;
+} /* s2mpeg_array_mono */
 
+static void
+s2mpeg_array_stereo (const short *ptr, float *pcm_l, float *pcm_r, int nsamp)
+{	while (nsamp--)
+	{	*pcm_l++ = *ptr++ ;
+		*pcm_r++ = *ptr++ ;
+		} ;
+} /* s2mpeg_array_stereo */
 
 static sf_count_t
-mpeg_write (SF_PRIVATE *psf, const void *ptr, sf_count_t len, mpeg_write_func func)
+mpeg_write_s (SF_PRIVATE *psf, const short *ptr, sf_count_t len)
 {	MPEG_PRIVATE *pmpeg = (MPEG_PRIVATE*) psf->codec_data ;
-	sf_count_t total, k ;
-	int ret, nsamp ;
+	sf_count_t total, nsamp, nwritten ;
+	void (*convert) (const short *, float *, float *, int nsamp) ;
+	int ret ;
 
 	if (!pmpeg->len && (psf->error = mpeg_encoder_construct (psf)))
 		return 0 ;
 
+	len /= psf->sf.channels ;
+	convert = psf->sf.channels == 1 ? s2mpeg_array_mono : s2mpeg_array_stereo ;
+
+	/* Working in samples / channel */
 	for (total = 0 ; total < len ; total += nsamp)
 	{	nsamp = SF_MIN ((int) (len - total), pmpeg->max_samp) ;
-		ret = func (pmpeg, &ptr, nsamp) ;
+		convert (ptr + total, pmpeg->pcm.l, pmpeg->pcm.r, nsamp) ;
+		ret = lame_encode_buffer_float (
+				pmpeg->lamef, pmpeg->pcm.l, pmpeg->pcm.r, nsamp, pmpeg->block, pmpeg->len) ;
 		if (ret < 0)
-		{	psf_log_printf (psf, "lame_encode_buffer returned %d\n", ret) ;
+		{	psf_log_printf (psf, "lame_encode_buffer_float returned %d\n", ret) ;
 			break ;
 			} ;
 
 		if (ret)
-		{	if ((k = psf_fwrite (pmpeg->block, 1, ret, psf)) != ret)
-			{	psf_log_printf (psf, "*** Warning : short write (%d != %d).\n", k, ret) ;
+		{	nwritten = psf_fwrite (pmpeg->block, 1, ret, psf) ;
+			if (nwritten != ret)
+			{	psf_log_printf (psf, "*** Warning : short write (%d != %d).\n", nwritten, ret) ;
 				} ;
 			} ;
-	} ;
+		} ;
 
-	return total ;
-} /* mpeg_write */
+	return total * psf->sf.channels ;
+} /* mpeg_write_s */
 
-static int
-mpeg_write_short_mono (MPEG_PRIVATE *pmpeg, void const ** buffer, const int nsamp)
-{	int ret ;
-	ret = lame_encode_buffer (
-		pmpeg->lamef, (const short *) *buffer, NULL, nsamp, pmpeg->block, pmpeg->len) ;
-	if (ret >= 0)
-		*((short const **) buffer) += nsamp ;
-	return ret ;
-}
+static void
+i2mpeg_array_mono (const int *ptr, float *pcm_l, float * UNUSED (pcm_r), int nsamp)
+{	while (nsamp--)
+		*pcm_l++ = *ptr++ ;
+} /* i2mpeg_array_mono */
 
-static int
-mpeg_write_short_stereo (MPEG_PRIVATE *pmpeg, void const ** buffer, const int nsamp)
-{	int ret ;
-	ret = lame_encode_buffer_interleaved (
-		pmpeg->lamef, (const short *) *buffer, nsamp / 2, pmpeg->block, pmpeg->len) ;
-	if (ret >= 0)
-		*((short const **) buffer) += nsamp * 2 ;
-	return ret ;
-}
-
-static int
-mpeg_write_int_mono (MPEG_PRIVATE *pmpeg, void const ** buffer, const int nsamp)
-{	int ret ;
-	ret = lame_encode_buffer_int (
-		pmpeg->lamef, (const int *) *buffer, NULL, nsamp, pmpeg->block, pmpeg->len) ;
-	if (ret >= 0)
-		*((int const **) buffer) += nsamp ;
-	return ret ;
-}
-
-static int
-mpeg_write_int_stereo (MPEG_PRIVATE *pmpeg, void const ** buffer, const int nsamp)
-{	int ret ;
-	ret = lame_encode_buffer_interleaved_int (
-		pmpeg->lamef, (const int *) *buffer, nsamp / 2, pmpeg->block, pmpeg->len) ;
-	if (ret >= 0)
-		*((int const **) buffer) += nsamp * 2 ;
-	return ret ;
-}
-
-static int
-mpeg_write_float_mono (MPEG_PRIVATE *pmpeg, void const ** buffer, const int nsamp)
-{	int ret ;
-	ret = lame_encode_buffer_ieee_float (
-		pmpeg->lamef, (const float *) *buffer, NULL, nsamp, pmpeg->block, pmpeg->len) ;
-	if (ret >= 0)
-		*((float const **) buffer) += nsamp ;
-	return ret ;
-}
-
-static int
-mpeg_write_float_stereo (MPEG_PRIVATE *pmpeg, void const ** buffer, const int nsamp)
-{	int ret ;
-	ret = lame_encode_buffer_interleaved_ieee_float (
-		pmpeg->lamef, (const float *) *buffer, nsamp / 2, pmpeg->block, pmpeg->len) ;
-	if (ret >= 0)
-		*((float const **) buffer) += nsamp * 2 ;
-	return ret ;
-}
-
-static int
-mpeg_write_double_mono (MPEG_PRIVATE *pmpeg, void const ** buffer, const int nsamp)
-{	int ret ;
-	ret = lame_encode_buffer_ieee_double (
-		pmpeg->lamef, (const double *) *buffer, NULL, nsamp, pmpeg->block, pmpeg->len) ;
-	if (ret >= 0)
-		*((double const **) buffer) += nsamp ;
-	return ret ;
-}
-
-static int
-mpeg_write_double_stereo (MPEG_PRIVATE *pmpeg, void const ** buffer, const int nsamp)
-{	int ret ;
-	ret = lame_encode_buffer_interleaved_ieee_double (
-		pmpeg->lamef, (const double *) *buffer, nsamp / 2, pmpeg->block, pmpeg->len) ;
-	if (ret >= 0)
-		*((double const **) buffer) += nsamp * 2 ;
-	return ret ;
-}
-
-static sf_count_t
-mpeg_write_s (SF_PRIVATE *psf, const short *ptr, sf_count_t len)
-{
-	if (psf->sf.channels == 1)
-		return mpeg_write (psf, ptr, len, mpeg_write_short_mono) ;
-	else
-		return mpeg_write (psf, ptr, len, mpeg_write_short_stereo) ;
-}
+static void
+i2mpeg_array_stereo (const int *ptr, float *pcm_l, float *pcm_r, int nsamp)
+{	while (nsamp--)
+	{	*pcm_l++ = *ptr++ ;
+		*pcm_r++ = *ptr++ ;
+		} ;
+} /* i2mpeg_array_stereo */
 
 static sf_count_t
 mpeg_write_i (SF_PRIVATE *psf, const int *ptr, sf_count_t len)
-{
-	if (psf->sf.channels == 1)
-		return mpeg_write (psf, ptr, len, mpeg_write_int_mono) ;
-	else
-		return mpeg_write (psf, ptr, len, mpeg_write_int_stereo) ;
-}
+{	MPEG_PRIVATE *pmpeg = (MPEG_PRIVATE*) psf->codec_data ;
+	sf_count_t total, nsamp, nwritten ;
+	void (*convert) (const int *, float *, float *, int nsamp) ;
+	int ret ;
 
+	if (!pmpeg->len && (psf->error = mpeg_encoder_construct (psf)))
+		return 0 ;
+
+	len /= psf->sf.channels ;
+	convert = psf->sf.channels == 1 ? i2mpeg_array_mono : i2mpeg_array_stereo ;
+
+	/* Working in samples / channel */
+	for (total = 0 ; total < len ; total += nsamp)
+	{	nsamp = SF_MIN ((int) (len - total), pmpeg->max_samp) ;
+		convert (ptr + total, pmpeg->pcm.l, pmpeg->pcm.r, nsamp) ;
+		ret = lame_encode_buffer_float (
+				pmpeg->lamef, pmpeg->pcm.l, pmpeg->pcm.r, nsamp, pmpeg->block, pmpeg->len) ;
+		if (ret < 0)
+		{	psf_log_printf (psf, "lame_encode_buffer_float returned %d\n", ret) ;
+			break ;
+			} ;
+
+		if (ret)
+		{	nwritten = psf_fwrite (pmpeg->block, 1, ret, psf) ;
+			if (nwritten != ret)
+			{	psf_log_printf (psf, "*** Warning : short write (%d != %d).\n", nwritten, ret) ;
+				} ;
+			} ;
+		} ;
+
+	return total * psf->sf.channels ;
+} /* mpeg_write_i */
+
+static void
+f2mpeg_array_mono (const float *ptr, float *pcm_l, float * UNUSED (pcm_r), int nsamp, int norm)
+{	float normfact = norm ? 32768.0 : 1.0 ;
+	while (nsamp--)
+	{	*pcm_l++ = *ptr++ * normfact ;
+		} ;
+} /* f2mpeg_array_mono */
+
+static void
+f2mpeg_array_stereo (const float *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm)
+{	float normfact = norm ? 32768.0 : 1.0 ;
+	while (nsamp--)
+	{	*pcm_l++ = *ptr++ * normfact ;
+		*pcm_r++ = *ptr++ * normfact ;
+		} ;
+} /* f2mpeg_array_stereo */
+
+static void
+f2mpeg_array_mono_clip (const float *ptr, float *pcm_l, float * UNUSED (pcm_r), int nsamp, int norm)
+{	float normfact = norm ? 32768.0 : 1.0 ;
+	float value ;
+	while (nsamp--)
+	{	value = *ptr++ * normfact ;
+		if (value > 32768.0)
+			value = 32768.0 ;
+		else if (value < -32768.0)
+			value = -32768.0 ;
+		*pcm_l++ = value ;
+		} ;
+} /* f2mpeg_array_mono_clip */
+
+static void
+f2mpeg_array_stereo_clip (const float *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm)
+{	float normfact = norm ? 32768.0 : 1.0 ;
+	float value ;
+	while (nsamp--)
+	{	value = *ptr++ * normfact ;
+		if (value > 32768.0)
+			value = 32768.0 ;
+		else if (value < -32768.0)
+			value = -32768.0 ;
+		*pcm_l++ = value ;
+
+		value = *ptr++ * normfact ;
+		if (value > 32768.0)
+			value = 32768.0 ;
+		else if (value < -32768.0)
+			value = -32768.0 ;
+		*pcm_r++ = value ;
+		} ;
+} /* f2mpeg_array_stereo_clip */
+
+/*
+** Lame's float encoding functions get us 3/4 of the way there, but lack a
+** non-normalized interleaved function. As we have to add explicit clipping
+** anyways, screw it, copy everything.
+*/
 static sf_count_t
 mpeg_write_f (SF_PRIVATE *psf, const float *ptr, sf_count_t len)
-{
-	if (psf->sf.channels == 1)
-		return mpeg_write (psf, ptr, len, mpeg_write_float_mono) ;
+{	MPEG_PRIVATE *pmpeg = (MPEG_PRIVATE*) psf->codec_data ;
+	sf_count_t total, nsamp, nwritten ;
+	void (*convert) (const float *, float *, float *, int nsamp, int norm) ;
+	int ret ;
+
+	if (!pmpeg->len && (psf->error = mpeg_encoder_construct (psf)))
+		return 0 ;
+
+	len /= psf->sf.channels ;
+	if (psf->add_clipping)
+		convert = psf->sf.channels == 1 ? f2mpeg_array_mono : f2mpeg_array_stereo ;
 	else
-		return mpeg_write (psf, ptr, len, mpeg_write_float_stereo) ;
-}
+		convert = psf->sf.channels == 1 ? f2mpeg_array_mono_clip : f2mpeg_array_stereo_clip ;
+
+	/* Working in samples / channel */
+	for (total = 0 ; total < len ; total += nsamp)
+	{	nsamp = SF_MIN ((int) (len - total), pmpeg->max_samp) ;
+		convert (ptr + total, pmpeg->pcm.l, pmpeg->pcm.r, nsamp, psf->norm_float) ;
+		ret = lame_encode_buffer_float (
+				pmpeg->lamef, pmpeg->pcm.l, pmpeg->pcm.r, nsamp, pmpeg->block, pmpeg->len) ;
+		if (ret < 0)
+		{	psf_log_printf (psf, "lame_encode_buffer_float returned %d\n", ret) ;
+			break ;
+			} ;
+
+		if (ret)
+		{	nwritten = psf_fwrite (pmpeg->block, 1, ret, psf) ;
+			if (nwritten != ret)
+			{	psf_log_printf (psf, "*** Warning : short write (%d != %d).\n", nwritten, ret) ;
+				} ;
+			} ;
+		} ;
+
+	return total * psf->sf.channels ;
+} /*mpeg_write_f */
+
+static void
+d2mpeg_array_mono (const double *ptr, float *pcm_l, float * UNUSED (pcm_r), int nsamp, int norm)
+{	float normfact = norm ? 32768.0 : 1.0 ;
+	while (nsamp--)
+	{	*pcm_l++ = *ptr++ * normfact ;
+		} ;
+} /* d2mpeg_array_mono */
+
+static void
+d2mpeg_array_stereo (const double *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm)
+{	float normfact = norm ? 32768.0 : 1.0 ;
+	while (nsamp--)
+	{	*pcm_l++ = *ptr++ * normfact ;
+		*pcm_r++ = *ptr++ * normfact ;
+		} ;
+} /* d2mpeg_array_stereo */
+
+static void
+d2mpeg_array_mono_clip (const double *ptr, float *pcm_l, float * UNUSED (pcm_r), int nsamp, int norm)
+{	float normfact = norm ? 32768.0 : 1.0 ;
+	float value ;
+	while (nsamp--)
+	{	value = *ptr++ * normfact ;
+		if (value > 32768.0)
+			value = 32768.0 ;
+		else if (value < -32768.0)
+			value = -32768.0 ;
+		*pcm_l++ = value ;
+		} ;
+} /* d2mpeg_array_mono_clip */
+
+static void
+d2mpeg_array_stereo_clip (const double *ptr, float *pcm_l, float *pcm_r, int nsamp, int norm)
+{	float normfact = norm ? 32768.0 : 1.0 ;
+	float value ;
+	while (nsamp--)
+	{	value = *ptr++ * normfact ;
+		if (value > 32768.0)
+			value = 32768.0 ;
+		else if (value < -32768.0)
+			value = -32768.0 ;
+		*pcm_l++ = value ;
+
+		value = *ptr++ * normfact ;
+		if (value > 32768.0)
+			value = 32768.0 ;
+		else if (value < -32768.0)
+			value = -32768.0 ;
+		*pcm_r++ = value ;
+		} ;
+} /* d2mpeg_array_stereo_clip */
 
 static sf_count_t
 mpeg_write_d (SF_PRIVATE *psf, const double *ptr, sf_count_t len)
-{
-	if (psf->sf.channels == 1)
-		return mpeg_write (psf, ptr, len, mpeg_write_double_mono) ;
+{	MPEG_PRIVATE *pmpeg = (MPEG_PRIVATE*) psf->codec_data ;
+	sf_count_t total, nsamp, nwritten ;
+	void (*convert) (const double *, float *, float *, int nsamp, int norm) ;
+	int ret ;
+
+	if (!pmpeg->len && (psf->error = mpeg_encoder_construct (psf)))
+		return 0 ;
+
+	len /= psf->sf.channels ;
+	if (psf->add_clipping)
+		convert = psf->sf.channels == 1 ? d2mpeg_array_mono : d2mpeg_array_stereo ;
 	else
-		return mpeg_write (psf, ptr, len, mpeg_write_double_stereo) ;
-}
+		convert = psf->sf.channels == 1 ? d2mpeg_array_mono_clip : d2mpeg_array_stereo_clip ;
 
+	/* Working in samples / channel */
+	for (total = 0 ; total < len ; total += nsamp)
+	{	nsamp = SF_MIN ((int) (len - total), pmpeg->max_samp) ;
+		convert (ptr + total, pmpeg->pcm.l, pmpeg->pcm.r, nsamp, psf->norm_double) ;
+		ret = lame_encode_buffer_float (
+				pmpeg->lamef, pmpeg->pcm.l, pmpeg->pcm.r, nsamp, pmpeg->block, pmpeg->len) ;
+		if (ret < 0)
+		{	psf_log_printf (psf, "lame_encode_buffer_float returned %d\n", ret) ;
+			break ;
+			} ;
 
+		if (ret)
+		{	nwritten = psf_fwrite (pmpeg->block, 1, ret, psf) ;
+			if (nwritten != ret)
+			{	psf_log_printf (psf, "*** Warning : short write (%d != %d).\n", nwritten, ret) ;
+				} ;
+			} ;
+		} ;
+
+	return total * psf->sf.channels ;
+} /* mpeg_write_d */
 
 #else /* ENABLE_EXPERIMENTAL_CODE && HAVE_LAME */
 
