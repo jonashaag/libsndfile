@@ -31,16 +31,20 @@ typedef struct
 	unsigned char *block ;
 	size_t len ;
 	int max_samp ;
-	struct {
-		float *l ;
+	struct
+	{	float *l ;
 		float *r ;
-	} pcm ;
+		} pcm ;
 } MPEG_PRIVATE ;
 
 
 static int	mpeg_close (SF_PRIVATE *psf) ;
 static int	mpeg_init (SF_PRIVATE *psf) ;
+static int	mpeg_write_header (SF_PRIVATE *psf, int calc_length) ;
+static int	mpeg_command (SF_PRIVATE *psf, int command, void *data, int datasize) ;
+static int	mpeg_byterate (SF_PRIVATE *psf) ;
 static int	mpeg_encoder_construct (SF_PRIVATE *psf) ;
+static void	mpeg_log_lame_config (SF_PRIVATE *psf, lame_t lamef) ;
 
 static void s2mpeg_array_mono (const short *ptr, float *pcm_l, float *pcm_r, int nsamp) ;
 static void s2mpeg_array_stereo (const short *ptr, float *pcm_l, float *pcm_r, int nsamp) ;
@@ -83,11 +87,16 @@ mpeg_open (SF_PRIVATE *psf)
 	{	if ((error = mpeg_init (psf)))
 			return error ;
 
-		/* TODO ID3 support */
-
+		/* ID3 support */
+		psf->strings.flags = SF_STR_ALLOW_START ;
+		psf->write_header = mpeg_write_header ;
 		pmpeg = (MPEG_PRIVATE *) psf->codec_data ;
+
 		lame_set_VBR (pmpeg->lamef, 1) ;
 		} ;
+
+	psf->command =	mpeg_command ;
+	psf->byterate =	mpeg_byterate ;
 
 	return 0 ;
 } /* mpeg_open */
@@ -112,6 +121,20 @@ mpeg_close (SF_PRIVATE *psf)
 		ret = lame_encode_flush (pmpeg->lamef, buffer, len) ;
 		if (ret > 0)
 			psf_fwrite (buffer, 1, ret, psf) ;
+
+		/* Write an IDv1 trailer */
+		ret = lame_get_id3v1_tag (pmpeg->lamef, 0, 0) ;
+		if (ret > 0)
+		{	if (ret > len)
+			{	len = ret ;
+				free (buffer) ;
+				if (! (buffer = malloc (len)))
+					return SFE_MALLOC_FAILED ;
+				} ;
+			psf_log_printf (psf, "  Writing ID3v1 trailer.\n") ;
+			lame_get_id3v1_tag (pmpeg->lamef, buffer, len) ;
+			psf_fwrite (buffer, 1, ret, psf) ;
+			} ;
 
 		/*
 		** If possible, seek back and write the LAME/XING/Info headers. This
@@ -207,7 +230,6 @@ mpeg_init (SF_PRIVATE *psf)
 	return 0 ;
 } /* mpeg_init */
 
-
 static int
 mpeg_encoder_construct (SF_PRIVATE *psf)
 {	MPEG_PRIVATE *pmpeg = (MPEG_PRIVATE *) psf->codec_data ;
@@ -216,6 +238,9 @@ mpeg_encoder_construct (SF_PRIVATE *psf)
 	{	psf_log_printf (psf, "Failed to initialize lame encoder!\n") ;
 		return SFE_INTERNAL ;
 		} ;
+
+	psf_log_printf (psf, "Initialized LAME encoder.\n") ;
+	mpeg_log_lame_config (psf, pmpeg->lamef) ;
 
 	pmpeg->len = lame_get_framesize (pmpeg->lamef) * 4 ;
 	if (! (pmpeg->block = malloc (pmpeg->len)))
@@ -236,6 +261,171 @@ mpeg_encoder_construct (SF_PRIVATE *psf)
 
 	return 0 ;
 } /* mpeg_encoder_construct */
+
+static void
+mpeg_log_lame_config (SF_PRIVATE *psf, lame_t lamef)
+{	const char *version ;
+	const char *chn_mode ;
+
+	switch (lame_get_version (lamef))
+	{	case 0 : version = "2" ; break ;
+		case 1 : version = "1" ; break ;
+		case 2 : version = "2.5" ; break ;
+		default : version = "unknown!?" ; break ;
+		}
+
+	switch (lame_get_mode (lamef))
+	{	case STEREO : chn_mode = "stereo" ; break ;
+		case JOINT_STEREO : chn_mode = "joint-stereo" ; break ;
+		case MONO : chn_mode = "mono" ; break ;
+		default : chn_mode = "unknown!?" ; break ;
+		} ;
+
+	psf_log_printf (psf, "  MPEG-%s %dHz %s\n",
+		version, lame_get_out_samplerate (lamef), chn_mode) ;
+
+	psf_log_printf (psf, "  Encoder mode      : ") ;
+	switch (lame_get_VBR (lamef))
+	{	case vbr_off :
+			psf_log_printf (psf, "CBR\n") ;
+			psf_log_printf (psf, "  Compression ratio : %d\n", lame_get_compression_ratio (lamef)) ;
+			psf_log_printf (psf, "  Bitrate           : %d kbps\n", lame_get_brate (lamef)) ;
+			break ;
+
+		case vbr_mt :
+		case vbr_default :
+			psf_log_printf (psf, "VBR\n") ;
+			psf_log_printf (psf, "  Quality           : %d\n", lame_get_VBR_q (lamef)) ;
+			break ;
+
+		default:
+			psf_log_printf (psf, "Unknown!? (%d)\n", lame_get_VBR (lamef)) ;
+			break ;
+		} ;
+
+	psf_log_printf (psf, "  Encoder delay     : %d\n", lame_get_encoder_delay (lamef)) ;
+	psf_log_printf (psf, "  Write INFO header : %d\n", lame_get_bWriteVbrTag (lamef)) ;
+} /* mpeg_log_lame_config */
+
+static int
+mpeg_write_header (SF_PRIVATE *psf, int UNUSED (calc_length))
+{	MPEG_PRIVATE *pmpeg = (MPEG_PRIVATE *) psf->codec_data ;
+	unsigned char *id3v2_buffer ;
+	int i, id3v2_size ;
+
+	if (psf->have_written)
+		return 0 ;
+
+	if (!pmpeg->len && (psf->error = mpeg_encoder_construct (psf)))
+		return 0 ;
+
+	if (psf_fseek (psf, 0, SEEK_SET) != 0)
+		return SFE_NOT_SEEKABLE ;
+
+	/* Safe to call multiple times. */
+	id3tag_init (pmpeg->lamef) ;
+
+	for (i = 0 ; i < SF_MAX_STRINGS ; i++)
+	{	switch (psf->strings.data [i].type)
+		{	case SF_STR_TITLE :
+				id3tag_set_title (pmpeg->lamef, psf->strings.storage + psf->strings.data [i].offset) ;
+				break ;
+
+			case SF_STR_ARTIST :
+				id3tag_set_artist (pmpeg->lamef, psf->strings.storage + psf->strings.data [i].offset) ;
+				break ;
+
+			case SF_STR_ALBUM :
+				id3tag_set_album (pmpeg->lamef, psf->strings.storage + psf->strings.data [i].offset) ;
+				break ;
+
+			case SF_STR_DATE :
+				id3tag_set_year (pmpeg->lamef, psf->strings.storage + psf->strings.data [i].offset) ;
+				break ;
+
+			case SF_STR_COMMENT :
+				id3tag_set_comment (pmpeg->lamef, psf->strings.storage + psf->strings.data [i].offset) ;
+				break ;
+
+			case SF_STR_GENRE :
+				id3tag_set_genre (pmpeg->lamef, psf->strings.storage + psf->strings.data [i].offset) ;
+				break ;
+
+			case SF_STR_TRACKNUMBER :
+				id3tag_set_track (pmpeg->lamef, psf->strings.storage + psf->strings.data [i].offset) ;
+				break ;
+
+			default:
+				break ;
+			} ;
+		} ;
+
+	/* The header in this case is the ID3v2 tag header. */
+	id3v2_size = lame_get_id3v2_tag (pmpeg->lamef, 0, 0) ;
+	if (id3v2_size > 0)
+	{	psf_log_printf (psf, "Writing ID3v2 header.\n") ;
+		if (! (id3v2_buffer = malloc (id3v2_size)))
+			return SFE_MALLOC_FAILED ;
+		lame_get_id3v2_tag (pmpeg->lamef, id3v2_buffer, id3v2_size) ;
+		psf_fwrite (id3v2_buffer, 1, id3v2_size, psf) ;
+		psf->dataoffset = id3v2_size ;
+		free (id3v2_buffer) ;
+		} ;
+
+	return 0 ;
+} /* mpeg_write_header */
+
+static int
+mpeg_command (SF_PRIVATE *psf, int command, void *data, int datasize)
+{	MPEG_PRIVATE *pmpeg = (MPEG_PRIVATE *) psf->codec_data ;
+	float quality ;
+
+	switch (command)
+	{	case SFC_SET_COMPRESSION_LEVEL :
+			if (data == NULL || datasize != sizeof (double))
+				return SF_FALSE ;
+			if (psf->file.mode != SFM_WRITE || pmpeg->len)
+				return SF_FALSE ;
+
+			quality = *(float *) data ;
+			psf_log_printf (psf, "%s : Setting SFC_SET_COMPRESSION_LEVEL to %f.\n", __func__, quality) ;
+			if (lame_get_VBR (pmpeg->lamef) == vbr_off)
+			{	/* Constant bitrate mode. Set bitrate. */
+				if (lame_get_version (pmpeg->lamef) == 1)
+				{	/* MPEG-1. Available bitrates are 32-320 */
+					quality = 320.0 - (quality * 288.0) ;
+					}
+				else
+				{	/* MPEG-2/2.5. Available bitrates are 8-160 */
+					quality = 160.0 - (quality * 152.0) ;
+					} ;
+				if (!lame_set_brate (pmpeg->lamef, (int) quality))
+					return SF_TRUE ;
+				}
+			else
+			{	/* Variable bitrate mode. Set quality. */
+				if (!lame_set_VBR_quality (pmpeg->lamef, quality * 10.0))
+					return SF_TRUE ;
+				} ;
+
+			// fall-through
+		default :
+			return SF_FALSE ;
+		} ;
+
+	return SF_FALSE ;
+} /* mpeg_command */
+
+static int
+mpeg_byterate (SF_PRIVATE *psf)
+{	MPEG_PRIVATE *pmpeg = (MPEG_PRIVATE *) psf->codec_data ;
+	if (psf->file.mode == SFM_WRITE)
+	{	/* TODO: For VBR this returns the minimum byterate. */
+		return lame_get_brate (pmpeg->lamef) / 8 ;
+		}
+
+	return 0 ;
+} /* mpeg_byterate */
 
 static void
 s2mpeg_array_mono (const short *ptr, float *pcm_l, float * UNUSED (pcm_r), int nsamp)
