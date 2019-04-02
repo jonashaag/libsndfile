@@ -1046,15 +1046,9 @@ ogg_opus_read_refill (SF_PRIVATE *psf, OGG_PRIVATE *odata, OPUS_PRIVATE *oopus)
 			} ;
 		} ;
 
-	if (oopus->len > oopus->buffersize)
-	{	free (oopus->buffer) ;
-		oopus->buffersize = oopus->len ;
-		oopus->buffer = malloc (sizeof (float) * oopus->buffersize * psf->sf.channels) ;
-		if (oopus->buffer == NULL)
-		{	psf->error = SFE_MALLOC_FAILED ;
-			oopus->buffersize = 0 ;
-			return -1 ;
-			} ;
+	if (oopus->len > nsamp)
+	{	psf->error = SFE_MALFORMED_FILE ;
+		return -1 ;
 		} ;
 
 	/*
