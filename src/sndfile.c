@@ -2764,7 +2764,7 @@ guess_file_type (SF_PRIVATE *psf)
 	if (buffer [0] == MAKE_MARKER ('R', 'F', '6', '4') && buffer [2] == MAKE_MARKER ('W', 'A', 'V', 'E'))
 		return SF_FORMAT_RF64 ;
 
-	if ((buffer [0] & MAKE_MARKER (0xFF, 0xFA, 0, 0)) == MAKE_MARKER (0xFF, 0xFA, 0, 0))
+	if ((buffer [0] & MAKE_MARKER (0xFF, 0xE0, 0, 0)) == MAKE_MARKER (0xFF, 0xE0, 0, 0))
 		return SF_FORMAT_MP3 | SF_FORMAT_MPEG_III ;
 
 	if (buffer [0] == MAKE_MARKER ('I', 'D', '3', 3))
@@ -3200,6 +3200,7 @@ psf_open_file (SF_PRIVATE *psf, SF_INFO *sfinfo)
 				break ;
 
 			case SF_FORMAT_FLAC :
+			case SF_FORMAT_MP3 :
 				/* Flac with an ID3v2 header? */
 				break ;
 

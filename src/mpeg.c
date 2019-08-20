@@ -24,6 +24,8 @@
 
 #if (ENABLE_EXPERIMENTAL_CODE && HAVE_LAME)
 
+#include "mpeg.h"
+
 #include <lame/lame.h>
 
 /*
@@ -202,7 +204,7 @@ mpeg_init (SF_PRIVATE *psf)
 		return SFE_MALLOC_FAILED ;
 
 	if (psf->file.mode == SFM_READ)
-	{	return SFE_UNIMPLEMENTED ;
+	{	return mpeg_dec_open (psf) ;
 		} ;
 
 	if (psf->file.mode == SFM_WRITE)
