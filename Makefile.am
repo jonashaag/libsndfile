@@ -69,16 +69,16 @@ src_libsndfile_la_SOURCES = src/sndfile.c src/aiff.c src/au.c src/avr.c src/caf.
 	src/common.h src/sfconfig.h src/sfendian.h src/wavlike.h src/sf_unistd.h src/ogg.h src/chanmap.h src/ogg_vcomment.h
 nodist_src_libsndfile_la_SOURCES = $(nodist_include_HEADERS)
 src_libsndfile_la_LIBADD = src/GSM610/libgsm.la src/G72x/libg72x.la src/ALAC/libalac.la \
-	src/libcommon.la $(EXTERNAL_XIPH_LIBS) -lm
+	src/libcommon.la $(EXTERNAL_XIPH_LIBS) -lm $(MPG123_LIBS)
 EXTRA_src_libsndfile_la_DEPENDENCIES = $(SYMBOL_FILES)
 
 noinst_LTLIBRARIES = src/libcommon.la
-src_libcommon_la_CFLAGS = $(EXTERNAL_XIPH_CFLAGS)
+src_libcommon_la_CFLAGS = $(EXTERNAL_XIPH_CFLAGS) $(MPG123_CFLAGS)
 src_libcommon_la_SOURCES = src/common.c src/file_io.c src/command.c src/pcm.c src/ulaw.c src/alaw.c \
 	src/float32.c src/double64.c src/ima_adpcm.c src/ms_adpcm.c src/gsm610.c src/dwvw.c src/vox_adpcm.c \
 	src/interleave.c src/strings.c src/dither.c src/cart.c src/broadcast.c src/audio_detect.c \
 	src/ima_oki_adpcm.c src/ima_oki_adpcm.h src/alac.c src/chunk.c src/ogg.c src/chanmap.c \
-	src/windows.c src/id3.c src/nms_adpcm.c src/mpeg.c $(WIN_VERSION_FILE)
+	src/windows.c src/id3.c src/nms_adpcm.c src/mpeg.c src/mpeg_encode.c src/mpeg_decode.c $(WIN_VERSION_FILE)
 
 check_PROGRAMS = src/test_main
 src_test_main_SOURCES = src/test_main.c src/test_main.h src/test_conversions.c src/test_float.c src/test_endswap.c \

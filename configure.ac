@@ -153,7 +153,10 @@ AC_ARG_ENABLE([external-libs],
 	[AS_HELP_STRING([--disable-external-libs], [disable use of FLAC, Ogg and Vorbis [[default=no]]])])
 
 AC_ARG_ENABLE([lame],
-	[AS_HELP_STRING([--enable-lame], [disable use of LAME MP3 encoding support (experimental) [[defaults=no]]])])
+	[AS_HELP_STRING([--enable-lame], [enable use of LAME MP3 encoding support (experimental) [[defaults=no]]])])
+
+AC_ARG_ENABLE([mpg123],
+	[AS_HELP_STRING([--enable-mpg123], [enable use of MPG123 MPEG 1/2/3 decoding support (experimental) [[defaults=no]]])])
 
 AC_ARG_ENABLE(octave,
 	[AS_HELP_STRING([--enable-octave], [enable building of GNU Octave module])])
@@ -399,6 +402,21 @@ AS_IF([test "x$enable_experimental$enable_lame" = "xyesyes"], [
 	])
 
 AC_DEFINE_UNQUOTED([HAVE_LAME], [$HAVE_LAME], [Will be set to 1 if lame is available.])
+
+dnl ====================================================================================
+dnl  Check for libmpg123
+
+ac_cv_mpg123=0
+
+AS_IF([test "x$enable_experimental$enable_mpg123" = "xyesyes"], [
+		PKG_CHECK_MOD_VERSION([MPG123], [libmpg123 >= 1.25.11], [ac_cv_mpg123="1"], [
+				ac_cv_mpg123="0"
+				enable_mpg123 = "no"
+			])
+	])
+
+AC_DEFINE_UNQUOTED([HAVE_MPG123], [${ac_cv_mpg123}], [Will be set to 1 if mpg123 is available.])
+AM_CONDITIONAL([HAVE_MPG123], [test "x$ac_cv_mpg123" = "x1"])
 
 dnl ====================================================================================
 dnl  Check for libsqlite3 (only used in regtest).
@@ -679,12 +697,15 @@ AC_SUBST(WIN_RC_VERSION)
 
 AC_SUBST(HAVE_EXTERNAL_XIPH_LIBS)
 AC_SUBST(HAVE_LAME)
+AC_SUBST(HAVE_MPG123)
 AC_SUBST(OS_SPECIFIC_CFLAGS)
 AC_SUBST(OS_SPECIFIC_LINKS)
 AC_SUBST(SNDIO_LIBS)
 
 AC_SUBST(EXTERNAL_XIPH_CFLAGS)
 AC_SUBST(EXTERNAL_XIPH_LIBS)
+AC_SUBST(MPG123_CFLAGS)
+AC_SUBST(MPG123_LIBS)
 AC_SUBST(SRC_BINDIR)
 AC_SUBST(TEST_BINDIR)
 
@@ -731,6 +752,7 @@ AC_MSG_RESULT([
     Using ALSA in example programs : ...... ${enable_alsa:-no}
     External FLAC/Ogg/Vorbis/Opus : ....... ${enable_external_libs:-no}
     External Lame mp3 encoding : .......... ${enable_lame:-no}
+    External MPG123 decoding : ............ ${enable_mpg123:-no}
     Building Octave interface : ........... ${OCTAVE_BUILD}
 
   Tools :
