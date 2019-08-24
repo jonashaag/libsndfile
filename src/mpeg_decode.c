@@ -39,6 +39,7 @@ typedef struct
 } MPEG_DEC_PRIVATE ;
 
 static int mpeg_dec_close (SF_PRIVATE *psf) ;
+static sf_count_t mpeg_dec_seek (SF_PRIVATE *psf, int whence, sf_count_t count) ;
 
 static ssize_t mpeg_dec_io_read (void *priv, void *buffer, size_t nbytes) ;
 static off_t mpeg_dec_io_lseek (void *priv, off_t offset, int whence) ;
@@ -205,13 +206,33 @@ mpeg_dec_read_d (SF_PRIVATE *psf, double *ptr, sf_count_t len)
 	f2d_array ((float *) ptr, done, ptr, normfact) ;
 
 	return done ;
-}
+} /* mpeg_dec_read_d */
 
-static int mpeg_dec_fill_sfinfo (mpg123_handle *mh, SF_INFO *info)
+static sf_count_t
+mpeg_dec_seek (SF_PRIVATE *psf, int mode, sf_count_t count)
+{	MPEG_DEC_PRIVATE *pmp3d = (MPEG_DEC_PRIVATE *) psf->codec_data ;
+	off_t ret ;
+
+	if (mode != SFM_READ || psf->file.mode != SFM_READ)
+	{	psf->error = SFE_BAD_SEEK ;
+		return PSF_SEEK_ERROR ;
+		} ;
+
+	ret = mpg123_seek (pmp3d->pmh, count, SEEK_SET) ;
+
+	if (ret < 0)
+		return PSF_SEEK_ERROR ;
+
+	return (sf_count_t) ret ;
+} /* mpeg_dec_seek */
+
+static int
+mpeg_dec_fill_sfinfo (mpg123_handle *mh, SF_INFO *info)
 {	int error ;
 	int channels ;
 	int encoding ;
 	long rate ;
+	off_t length ;
 
 	error = mpg123_getformat (mh, &rate, &channels, &encoding) ;
 	if (error == MPG123_OK)
@@ -224,10 +245,21 @@ static int mpeg_dec_fill_sfinfo (mpg123_handle *mh, SF_INFO *info)
 			} ;
 		} ;
 
+	length = mpg123_length (mh) ;
+	if (length >= 0)
+	{	info->frames = length ;
+		info->seekable = SF_TRUE ;
+		}
+	else
+	{	info->frames = SF_COUNT_MAX ;
+		info->seekable = SF_FALSE ;
+		}
+
 	return error ;
-}
+} /* mpeg_dec_fill_sfinfo */
+
 int
-mpeg_dec_open (SF_PRIVATE *psf)
+mpeg_decoder_init (SF_PRIVATE *psf)
 {	MPEG_DEC_PRIVATE *pmp3d ;
 	struct mpg123_frameinfo fi ;
 	int error ;
@@ -255,7 +287,7 @@ mpeg_dec_open (SF_PRIVATE *psf)
 
 	mpg123_param (pmp3d->pmh, MPG123_REMOVE_FLAGS, MPG123_AUTO_RESAMPLE, 1.0) ;
 	mpg123_param (pmp3d->pmh, MPG123_ADD_FLAGS, MPG123_FORCE_FLOAT, 1.0) ;
-	mpg123_param (pmp3d->pmh, MPG123_VERBOSE, 12, 1.0) ;
+	//mpg123_param (pmp3d->pmh, MPG123_VERBOSE, 12, 1.0) ;
 
 	if (psf_is_pipe (psf))
 	{	mpg123_param (pmp3d->pmh, MPG123_ADD_FLAGS, MPG123_NO_PEEK_END, 1.0) ;
@@ -280,6 +312,13 @@ mpeg_dec_open (SF_PRIVATE *psf)
 	{	psf_log_printf (psf, "Cannot get MP3 frame info: %s\n", mpg123_plain_strerror (error)) ;
 		return SFE_INTERNAL ;
 		}
+
+	switch (fi.layer)
+	{	case 1 : psf->sf.format |= SF_FORMAT_MPEG_I ; break ;
+		case 2 : psf->sf.format |= SF_FORMAT_MPEG_II ; break ;
+		case 3 : psf->sf.format |= SF_FORMAT_MPEG_III ; break ;
+		default : break ;
+		} ;
 
 	psf_log_printf (psf, "  version: %s\n",
 		fi.version == MPG123_1_0 ? "MPEG 1.0" :
@@ -317,16 +356,12 @@ mpeg_dec_open (SF_PRIVATE *psf)
 
 	mpeg_dec_fill_sfinfo (pmp3d->pmh, &psf->sf) ;
 
-	error = mpg123_length (pmp3d->pmh) ;
-	if (error >= 0)
-		psf->sf.frames = error ;
-	else
-		psf->sf.frames = SF_COUNT_MAX ;
 
 	psf->read_short = mpeg_dec_read_s ;
 	psf->read_int	= mpeg_dec_read_i ;
 	psf->read_float	= mpeg_dec_read_f ;
 	psf->read_double = mpeg_dec_read_d ;
+	psf->seek = mpeg_dec_seek ;
 
 	/* TODO ? */
 	psf->dataoffset = 0 ;
