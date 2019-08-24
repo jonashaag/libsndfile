@@ -22,6 +22,11 @@
 
 #include	"common.h"
 
-int mpeg_dec_open (SF_PRIVATE *psf) ;
+int mpeg_decoder_init (SF_PRIVATE *psf) ;
+
+int mpeg_encoder_init (SF_PRIVATE *psf, int vbr) ;
+int mpeg_encoder_write_id3tag (SF_PRIVATE *psf) ;
+int mpeg_encoder_set_quality (SF_PRIVATE *psf, double quality) ;
+
 
 #endif /* SNDFILE_MPEG_H */
