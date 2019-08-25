@@ -876,7 +876,7 @@ sf_format_check	(const SF_INFO *info)
 					return 0 ;
 				if (endian != SF_ENDIAN_FILE)
 					return 0 ;
-				if (subformat == SF_FORMAT_MPEG_I || subformat == SF_FORMAT_MPEG_II || SF_FORMAT_MPEG_III)
+				if (subformat == SF_FORMAT_MPEG_I || subformat == SF_FORMAT_MPEG_II || subformat == SF_FORMAT_MPEG_III)
 					return 1 ;
 				break ;
 		default : break ;
