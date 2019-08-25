@@ -95,7 +95,7 @@ mpeg_command (SF_PRIVATE *psf, int command, void *data, int datasize)
 #else /* ENABLE_EXPERIMENTAL_CODE */
 
 int
-mpeg_open (PSF_PRIVATE *psf)
+mpeg_open (SF_PRIVATE *psf)
 {
 	psf_log_printf (psf, "This version of libsndfile was compiled without MP3 support.\n") ;
 	return SFE_UNIMPLEMENTED ;

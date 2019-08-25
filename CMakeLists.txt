@@ -239,6 +239,9 @@ add_library (sndfile
 	src/ogg_opus.c
 	src/ogg_vcomment.c
 	src/nms_adpcm.c
+	src/mpeg.c
+	src/mpeg_decode.c
+	src/mpeg_encode.c
 	src/GSM610/config.h
 	src/GSM610/gsm.h
 	src/GSM610/gsm610_priv.h

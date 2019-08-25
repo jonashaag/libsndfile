@@ -539,7 +539,7 @@ mpeg_encode_write_d_stereo (SF_PRIVATE *psf, const double *ptr, sf_count_t len)
 #else /* ENABLE_EXPERIMENTAL_CODE && HAVE_LAME */
 
 int
-mpeg_encoder_init (SF_PRIVATE *psf)
+mpeg_encoder_init (SF_PRIVATE *psf, int UNUSED (vbr))
 {	psf_log_printf (psf, "This version of libsndfile was compiled without MP3 encoding support.\n") ;
 	return SFE_UNIMPLEMENTED ;
 } /* mpeg_encoder_init */
