@@ -24,4 +24,6 @@ int id3_skip (SF_PRIVATE * psf) ;
 
 const char *id3_lookup_v1_genre (int number) ;
 
+const char *id3_process_v2_genre (const char *genre) ;
+
 #endif /* SF_SRC_ID3_H */

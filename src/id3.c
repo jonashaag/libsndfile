@@ -26,6 +26,7 @@
 #include	"sndfile.h"
 #include	"sfendian.h"
 #include	"common.h"
+#include	"id3.h"
 
 #if HAVE_MPEG
 #include	<lame/lame.h>
@@ -52,12 +53,16 @@ id3_lookup_v1_genre (int number)
 
 	return data.ret ;
 }
+
 #else /* HAVE_MPEG */
+
 const char *
 id3_lookup_v1_genre (int UNUSED (number))
 {	return NULL ;
 	}
+
 #endif
+
 
 int
 id3_skip (SF_PRIVATE * psf)
@@ -89,3 +94,31 @@ id3_skip (SF_PRIVATE * psf)
 
 	return 0 ;
 } /* id3_skip */
+
+const char *
+id3_process_v2_genre (const char *genre)
+{	int num = 0 ;
+	char c ;
+	const char *ptr ;
+
+	if (!genre)
+		return NULL ;
+
+	/*
+	** Genre may require more processing.
+	**
+	** It is allowed to have numeric references to the genre table from ID3v1.
+	** We'll just convert the simple case here, strings of the format "(nnn)".
+	*/
+	ptr = genre ;
+	if (ptr [0] == '(' && (c = *++ ptr) && isdigit (c))
+	{	num = c - '0' ;
+		while ((c == *++ ptr) && isdigit (c))
+			num = num * 10 + (c - '0') ;
+		if (c == ')' && (c = *++ ptr) == '\0' && num < 256)
+			if ((ptr = id3_lookup_v1_genre (num)))
+				return ptr ;
+		} ;
+
+	return genre ;
+} /* id3_process_v2_genre */

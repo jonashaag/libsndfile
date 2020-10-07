@@ -23,16 +23,14 @@
 
 #include	"sndfile.h"
 #include	"common.h"
-
 #include	"mpeg.h"
 
 #if (ENABLE_EXPERIMENTAL_CODE && HAVE_MPEG)
 
-#include <mpg123.h>
+#include	"sfendian.h"
+#include	"id3.h"
 
-/* TODO
- * ID3v2 support.
- */
+#include <mpg123.h>
 
 typedef struct
 {	mpg123_handle *pmh ;
@@ -308,59 +306,186 @@ strcpy_inbounded (char *dest, size_t size, const char *src)
 		c = dest + size ;
 	*c = '\0' ;
 	return c - dest ;
-}
+} /* strcpy_inbounded */
+
+static void
+mpeg_decoder_read_strings_id3v1 (SF_PRIVATE *psf, mpg123_id3v1 *tags)
+{	const char *genre ;
+	char buf [31] ;
+
+	psf_log_printf (psf, "ID3v1 Tags\n") ;
+
+	if (strcpy_inbounded (buf, ARRAY_LEN (tags->title), tags->title))
+	{	psf_log_printf (psf, "  Title       : %s\n", buf) ;
+		psf_store_string (psf, SF_STR_TITLE, buf) ;
+		} ;
+
+	if (strcpy_inbounded (buf, ARRAY_LEN (tags->artist), tags->artist))
+	{	psf_log_printf (psf, "  Artist      : %s\n", buf) ;
+		psf_store_string (psf, SF_STR_ARTIST, buf) ;
+		} ;
+
+	if (strcpy_inbounded (buf, ARRAY_LEN (tags->album), tags->album))
+	{	psf_log_printf (psf, "  Album       : %s\n", buf) ;
+		psf_store_string (psf, SF_STR_ALBUM, buf) ;
+		} ;
+
+	if (strcpy_inbounded (buf, ARRAY_LEN (tags->year), tags->year))
+	{	psf_log_printf (psf, "  Year        : %s\n", buf) ;
+		psf_store_string (psf, SF_STR_DATE, buf) ;
+		} ;
+
+	if (strcpy_inbounded (buf, ARRAY_LEN (tags->comment), tags->comment))
+	{	psf_log_printf (psf, "  Comment     : %s\n", buf) ;
+		psf_store_string (psf, SF_STR_COMMENT, buf) ;
+		} ;
+
+	/* ID3v1.1 Tracknumber */
+	if (tags->comment [28] == '\0' && tags->comment [29] != '\0')
+	{	snprintf (buf, ARRAY_LEN (buf), "%hhu", (unsigned char) tags->comment [29]) ;
+		psf_log_printf (psf, "  Tracknumber : %s\n", buf) ;
+		psf_store_string (psf, SF_STR_TRACKNUMBER, buf) ;
+		} ;
+
+	if ((genre = id3_lookup_v1_genre (tags->genre)) != NULL)
+	{	psf_log_printf (psf, "  Genre       : %s\n", genre) ;
+		psf_store_string (psf, SF_STR_GENRE, genre) ;
+		} ;
+} /* mpeg_decoder_read_strings_id3v1 */
+
+static void
+mpeg_decoder_read_strings_id3v2 (SF_PRIVATE *psf, mpg123_id3v2 *tags)
+{	mpg123_text *text_frame ;
+	size_t i ;
+	uint32_t marker ;
+	const char *title		= NULL ;
+	const char *copyright	= NULL ;
+	const char *software	= NULL ;
+	const char *artist		= NULL ;
+	const char *comment		= NULL ;
+	const char *date		= NULL ;
+	const char *album		= NULL ;
+	const char *license		= NULL ;
+	const char *tracknumber	= NULL ;
+	const char *genre		= NULL ;
+	const char *tlen		= NULL ;
+
+	psf_log_printf (psf, "ID3v2 Tags\n") ;
+
+	// Read the parsed text tags
+	for (i = 0 ; i < tags->texts ; i++)
+	{	text_frame = &tags->text [i] ;
+		psf_log_printf (psf, "  %.4s        : %s\n", text_frame->id, text_frame->text.p) ;
+
+		// Thankfully mpg123 translates v2.2 3-byte frames to v2.3 4-byte for us.
+		marker = *((uint32_t *) &text_frame->id) ;
+
+		/* Use our own map of frame types to metadata for text frames */
+		switch (marker)
+		{	case MAKE_MARKER ('T', 'I', 'T', '2') :
+				title = text_frame->text.p ;
+				break ;
+
+			case MAKE_MARKER ('T', 'C', 'O', 'P') :
+				copyright = text_frame->text.p ;
+				break ;
+
+			case MAKE_MARKER ('T', 'E', 'N', 'C') :
+			case MAKE_MARKER ('T', 'S', 'S', 'E') :
+				software = text_frame->text.p ;
+				break ;
+
+			case MAKE_MARKER ('T', 'P', 'E', '1') :
+				artist = text_frame->text.p ;
+				break ;
+
+			case MAKE_MARKER ('T', 'A', 'L', 'B') :
+				album = text_frame->text.p ;
+				break ;
+
+			case MAKE_MARKER ('T', 'R', 'C', 'K') :
+				tracknumber = text_frame->text.p ;
+				break ;
+
+			case MAKE_MARKER ('T', 'Y', 'E', 'R') :
+			case MAKE_MARKER ('T', 'D', 'R', 'C') :
+			/* TODO (maybe)
+			case MAKE_MARKER ('T', 'D', 'A', 'T') :
+			case MAKE_MARKER ('T', 'I', 'M', 'E') :
+			case MAKE_MARKER ('T', 'D', 'R', 'A') :
+			*/
+				date = text_frame->text.p ;
+				break ;
+
+			case MAKE_MARKER ('T', 'O', 'W', 'N') :
+				tracknumber = text_frame->text.p ;
+				break ;
+
+			case MAKE_MARKER ('T', 'C', 'O', 'N') :
+				genre = text_frame->text.p ;
+				break ;
+
+			case MAKE_MARKER ('T', 'L', 'E', 'N') :
+				tlen = text_frame->text.p ;
+				break ;
+			} ;
+		} ;
+
+	/* Use mpg123's handling of comment headers, but print all the comment headers anyways. */
+	if (tags->comment)
+		comment = tags->comment->p ;
+	for (i = 0 ; i < tags->comments ; i++)
+	{	text_frame = &tags->comment_list [i] ;
+		psf_log_printf (psf, "  %.4s        : (%s)[%s] %s\n", text_frame->id,
+			text_frame->description. p, text_frame->lang, text_frame->text.p) ;
+		} ;
+
+	/* Print extra headers */
+	for (i = 0 ; i < tags->extras ; i++)
+	{	text_frame = &tags->extra [i] ;
+		psf_log_printf (psf, "  %.4s        : (%s) %s\n", text_frame->id,
+			text_frame->description.p, text_frame->text.p) ;
+		} ;
+
+	if (title)
+		psf_store_string (psf, SF_STR_TITLE, title) ;
+	if (copyright)
+		psf_store_string (psf, SF_STR_COPYRIGHT, copyright) ;
+	if (software)
+		psf_store_string (psf, SF_STR_SOFTWARE, software) ;
+	if (artist)
+		psf_store_string (psf, SF_STR_ARTIST, artist) ;
+	if (comment)
+		psf_store_string (psf, SF_STR_COMMENT, comment) ;
+	if (date)
+		psf_store_string (psf, SF_STR_DATE, date) ;
+	if (album)
+		psf_store_string (psf, SF_STR_ALBUM, album) ;
+	if (license)
+		psf_store_string (psf, SF_STR_LICENSE, license) ;
+	if (tracknumber)
+		psf_store_string (psf, SF_STR_TRACKNUMBER, tracknumber) ;
+	if (genre)
+		psf_store_string (psf, SF_STR_GENRE, id3_process_v2_genre (genre)) ;
+	if (tlen)
+	{	/* Do stuff */
+		} ;
+} /* mpeg_decoder_read_strings_id3v2 */
 
 static void
 mpeg_decoder_read_strings (SF_PRIVATE *psf)
 {	MPEG_DEC_PRIVATE *pmp3d = (MPEG_DEC_PRIVATE *) psf->codec_data ;
 	mpg123_id3v1 *v1_tags ;
 	mpg123_id3v2 *v2_tags ;
-	const char *genre ;
-	char buf [31] ;
 
 	if (mpg123_id3 (pmp3d->pmh, &v1_tags, &v2_tags) != MPG123_OK)
 		return ;
 
 	if (v1_tags != NULL)
-	{	psf_log_printf (psf, "ID3v1 Tags\n") ;
+		mpeg_decoder_read_strings_id3v1 (psf, v1_tags) ;
 
-		if (strcpy_inbounded (buf, ARRAY_LEN (v1_tags->title), v1_tags->title))
-		{	psf_log_printf (psf, "  Title       : %s\n", buf) ;
-			psf_store_string (psf, SF_STR_TITLE, buf) ;
-			} ;
-
-		if (strcpy_inbounded (buf, ARRAY_LEN (v1_tags->artist), v1_tags->artist))
-		{	psf_log_printf (psf, "  Artist      : %s\n", buf) ;
-			psf_store_string (psf, SF_STR_ARTIST, buf) ;
-			} ;
-
-		if (strcpy_inbounded (buf, ARRAY_LEN (v1_tags->album), v1_tags->album))
-		{	psf_log_printf (psf, "  Album       : %s\n", buf) ;
-			psf_store_string (psf, SF_STR_ALBUM, buf) ;
-			} ;
-
-		if (strcpy_inbounded (buf, ARRAY_LEN (v1_tags->year), v1_tags->year))
-		{	psf_log_printf (psf, "  Year        : %s\n", buf) ;
-			psf_store_string (psf, SF_STR_DATE, buf) ;
-			} ;
-
-		if (strcpy_inbounded (buf, ARRAY_LEN (v1_tags->comment), v1_tags->comment))
-		{	psf_log_printf (psf, "  Comment     : %s\n", buf) ;
-			psf_store_string (psf, SF_STR_COMMENT, buf) ;
-			} ;
-
-		/* ID3v1.1 Tracknumber */
-		if (v1_tags->comment [28] == '\0' && v1_tags->comment [29] != '\0')
-		{	snprintf (buf, ARRAY_LEN (buf), "%hhu", (unsigned char) v1_tags->comment [29]) ;
-			psf_log_printf (psf, "  Tracknumber : %s\n", buf) ;
-			psf_store_string (psf, SF_STR_TRACKNUMBER, buf) ;
-			} ;
-
-		if ((genre = id3_lookup_v1_genre (v1_tags->genre)) != NULL)
-		{	psf_log_printf (psf, "  Genre       : %s\n", genre) ;
-			psf_store_string (psf, SF_STR_GENRE, genre) ;
-			} ;
-		} ;
+	if (v2_tags != NULL)
+		mpeg_decoder_read_strings_id3v2 (psf, v2_tags) ;
 }
 
 static int

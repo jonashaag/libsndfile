@@ -22,16 +22,17 @@
 **
 ** Believe it or not, mp3 files don't exist.
 **
-** The MPEG-1 defined a few audio codecs. The standard only defined a streaming
-** format of semi-independent frames of audio meant for broadcasting, with no
-** details or hints about stored on-disk formats. Each frame defines it's own
-** bitrate, channel count, sample rate.
+** The MPEG-1 standard defined a few audio codecs. The standard only defined a
+** streaming format of semi-independent frames of audio meant for broadcasting,
+** with no details or hints about stored on-disk formats. Each frame defines
+** it's own bitrate, channel count, sample rate.
 **
 ** With it's amazing for the time compression ratio, the layer III audio codec
 ** became quite popular with file sharers. A stream of layer III audio would
 ** simply be written as a file, usually with the extension .mp3. Over time,
-** enthusiasts wrote better encoders, added different metadata headers and
-** trailers, file seeking tables, and fiddled with the codecs parameters.
+** enthousiast and proprietary encoders, sprung up addin different metadata
+** headers and trailers, file seeking tables, and fiddled with the codecs
+** parameters.
 **
 ** MPEG-1 I/II/III audio can be embedded in a few container formats (including
 ** WAV), stored raw, or with additional community-created metadata headers and
@@ -46,8 +47,19 @@
 ** - Contains only layer III audio frames (SF_FORMAT_MPEG_LAYER_III)
 ** - All MPEG frames contained in the file have the same channel count
 ** - All MPEG frames contained in the file have the same samplerate
-** - Has an ID3v1 trailer or an ID3v2 header or both.
-** - Has a Lame/Xing/Info header, unless it has a constant bitrate.
+** - Has at least one of:
+**   - an ID3v1 trailer
+**   - an ID3v2 header or trailer
+**   - A Lame/Xing/Info header
+**
+** Files that meet the other criteria but have no header or trailers will be
+** considered raw.
+**
+** Testing has revealed that, more than any other format, MP3 suffers from
+** corrupt file in the wild that most other software 'just works' with. This is
+** usually because the MP3 decoders are very lenient. They are aided by the
+** presense of a regular sync frame, but this makes it hard to classify them
+** in a library that consumes other better-specified file formats.
 */
 
 #include	"sfconfig.h"

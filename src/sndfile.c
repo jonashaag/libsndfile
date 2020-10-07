@@ -2788,11 +2788,16 @@ guess_file_type (SF_PRIVATE *psf)
 	if (buffer [0] == MAKE_MARKER ('R', 'F', '6', '4') && buffer [2] == MAKE_MARKER ('W', 'A', 'V', 'E'))
 		return SF_FORMAT_RF64 ;
 
-	if ((buffer [0] & MAKE_MARKER (0xFF, 0xE0, 0, 0)) == MAKE_MARKER (0xFF, 0xE0, 0, 0) &&
-		(buffer [0] & MAKE_MARKER (0, 0, 0xF0, 0)) != MAKE_MARKER (0, 0, 0xF0, 0))
+	if ((buffer [0] & MAKE_MARKER (0xFF, 0xE0, 0, 0)) == MAKE_MARKER (0xFF, 0xE0, 0, 0) && /* Frame sync */
+		(buffer [0] & MAKE_MARKER (0, 0x18, 0, 0)) != MAKE_MARKER (0, 0x08, 0, 0) && /* Valid MPEG version */
+		(buffer [0] & MAKE_MARKER (0, 0x06, 0, 0)) != MAKE_MARKER (0, 0, 0, 0) && /* Valid layer description */
+		(buffer [0] & MAKE_MARKER (0, 0, 0xF0, 0)) != MAKE_MARKER (0, 0, 0xF0, 0) && /* Valid bitrate */
+		(buffer [0] & MAKE_MARKER (0, 0, 0x0C, 0)) != MAKE_MARKER (0, 0, 0x0C, 0)) /* Valid samplerate */
 		return SF_FORMAT_MP3 ;
 
-	if (buffer [0] == MAKE_MARKER ('I', 'D', '3', 3))
+	if (buffer [0] == MAKE_MARKER ('I', 'D', '3', 2) ||
+		buffer [0] == MAKE_MARKER ('I', 'D', '3', 3) ||
+		buffer [0] == MAKE_MARKER ('I', 'D', '3', 4))
 	{	psf_log_printf (psf, "Found 'ID3' marker.\n") ;
 		if (id3_skip (psf))
 			return guess_file_type (psf) ;
