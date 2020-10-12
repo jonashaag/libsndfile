@@ -11,7 +11,7 @@ if (MPG123_INCLUDE_DIR)
 endif ()
 
 find_package (PkgConfig QUIET)
-pkg_check_modules(PC_MPG123 QUIET libmpg123>=1.25)
+pkg_check_modules(PC_MPG123 QUIET libmpg123>=1.26)
 
 set (MPG123_VERSION ${PC_MPG123_VERSION})
 

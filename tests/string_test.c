@@ -452,7 +452,7 @@ string_start_test (const char *filename, int formattype)
 
 	if (typemajor == SF_FORMAT_MP3)
 	{	cptr = sf_get_string (file, SF_STR_GENRE) ;
-		if (cptr == NULL || strcasecmp (id3v1_genre, cptr) != 0)
+		if (cptr == NULL || strcmp (id3v1_genre, cptr) != 0)
 		{	if (errors++ == 0)
 				puts ("\n") ;
 			printf ("    Bad genre     : %s\n", cptr) ;

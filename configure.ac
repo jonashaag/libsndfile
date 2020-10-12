@@ -415,7 +415,7 @@ AS_IF([test "x$enable_experimental$enable_mpeg" = "xyesyes"], [
 				AC_MSG_WARN([["Experimental MPEG support selected but external Lame library cannot be found.]])
 			])
 
-		PKG_CHECK_MOD_VERSION([MPG123], [libmpg123 >= 1.25.0], [
+		PKG_CHECK_MOD_VERSION([MPG123], [libmpg123 >= 1.26.0], [
 				ac_cv_mpg123="yes"
 			], [
 				AC_MSG_WARN([["Experimental MPEG support selected but external MPG123 library cannot be found.]])
