@@ -55,7 +55,7 @@ else ()
 endif ()
 
 find_package (Lame)
-find_package (Mpg123)
+find_package (Mpg123 1.25.10)
 if (LAME_FOUND AND MPG123_FOUND)
 	set (HAVE_MPEG_LIBS 1)
 else ()

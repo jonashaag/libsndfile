@@ -25,7 +25,7 @@
 #include	"common.h"
 #include	"mpeg.h"
 
-#if (ENABLE_EXPERIMENTAL_CODE && HAVE_MPEG)
+#if HAVE_MPEG
 
 #include	"sfendian.h"
 #include	"id3.h"
@@ -48,15 +48,14 @@ mpeg_dec_io_read (void *priv, void *buffer, size_t nbytes)
 {	SF_PRIVATE *psf = (SF_PRIVATE *) priv ;
 
 	return psf_fread (buffer, 1, nbytes, psf) ;
-}
+} /* mpeg_dec_io_read */
 
 static off_t
 mpeg_dec_io_lseek (void *priv, off_t offset, int whence)
 {	SF_PRIVATE *psf = (SF_PRIVATE *) priv ;
 
 	return psf_fseek (psf, offset, whence) ;
-}
-
+} /* mpeg_dec_io_lseek */
 
 static int
 mpeg_dec_close (SF_PRIVATE *psf)
@@ -73,12 +72,12 @@ mpeg_dec_close (SF_PRIVATE *psf)
 		} ;
 
 	return 0 ;
-}
+} /* mpeg_dec_close */
 
 static inline void
 f2s_array (const float *src, int count, short *dest)
 {	while (--count >= 0)
-	{	dest [count] = lrintf (src [count] * 0x7FFF) ;
+	{	dest [count] = lrintf (src [count] * 0x0.7FFFp16) ;
 		} ;
 } /* f2s_array */
 
@@ -113,12 +112,12 @@ mpeg_dec_read_s (SF_PRIVATE *psf, short *ptr, sf_count_t len)
 		}
 
 	return total ;
-}
+} /*mpeg_dec_read_s */
 
 static inline void
 f2i_array (const float *src, int count, int *dest)
 {	while (--count >= 0)
-	{	dest [count] = lrintf (src [count] * 0x7FFFFFFF) ;
+	{	dest [count] = lrintf (src [count] * 0x0.7FFFFFFFp32) ;
 		} ;
 } /* f2i_array */
 
@@ -151,7 +150,7 @@ mpeg_dec_read_i (SF_PRIVATE *psf, int *ptr, sf_count_t len)
 		}
 
 	return total ;
-}
+} /* mpeg_dec_read_i */
 
 static sf_count_t
 mpeg_dec_read_f (SF_PRIVATE *psf, float *ptr, sf_count_t len)
@@ -175,7 +174,7 @@ mpeg_dec_read_f (SF_PRIVATE *psf, float *ptr, sf_count_t len)
 		} ;
 
 	return done ;
-}
+} /* mpeg_dec_read_f */
 
 static inline void
 f2d_array (const float *src, int count, double *dest, double normfact)
@@ -378,7 +377,8 @@ mpeg_decoder_read_strings_id3v2 (SF_PRIVATE *psf, mpg123_id3v2 *tags)
 		psf_log_printf (psf, "  %.4s        : %s\n", text_frame->id, text_frame->text.p) ;
 
 		// Thankfully mpg123 translates v2.2 3-byte frames to v2.3 4-byte for us.
-		marker = *((uint32_t *) &text_frame->id) ;
+		marker = MAKE_MARKER (text_frame->id [0], text_frame->id [1],
+			text_frame->id [2], text_frame->id [3]) ;
 
 		/* Use our own map of frame types to metadata for text frames */
 		switch (marker)
@@ -468,7 +468,7 @@ mpeg_decoder_read_strings_id3v2 (SF_PRIVATE *psf, mpg123_id3v2 *tags)
 	if (genre)
 		psf_store_string (psf, SF_STR_GENRE, id3_process_v2_genre (genre)) ;
 	if (tlen)
-	{	/* Do stuff */
+	{	/* If non-seekable, set framecount? Can we trust it? */
 		} ;
 } /* mpeg_decoder_read_strings_id3v2 */
 
@@ -486,7 +486,7 @@ mpeg_decoder_read_strings (SF_PRIVATE *psf)
 
 	if (v2_tags != NULL)
 		mpeg_decoder_read_strings_id3v2 (psf, v2_tags) ;
-}
+} /* mpeg_decoder_read_strings */
 
 static int
 mpeg_dec_byterate (SF_PRIVATE *psf)
@@ -546,7 +546,13 @@ mpeg_decoder_init (SF_PRIVATE *psf)
 		mpeg_dec_io_read, mpeg_dec_io_lseek, NULL) ;
 
 	mpg123_param (pmp3d->pmh, MPG123_REMOVE_FLAGS, MPG123_AUTO_RESAMPLE, 1.0) ;
-	mpg123_param (pmp3d->pmh, MPG123_ADD_FLAGS, MPG123_FORCE_FLOAT | MPG123_NO_FRANKENSTEIN, 1.0) ;
+	mpg123_param (pmp3d->pmh, MPG123_ADD_FLAGS,
+#if MPG123_API_VERSION < 45
+		MPG123_FORCE_FLOAT,
+#else
+		MPG123_FORCE_FLOAT | MPG123_NO_FRANKENSTEIN,
+#endif
+		1.0) ;
 	//mpg123_param (pmp3d->pmh, MPG123_VERBOSE, 12, 1.0) ;
 
 	psf->dataoffset = 0 ;
@@ -602,7 +608,7 @@ mpeg_decoder_init (SF_PRIVATE *psf)
 		psf->datalength = SF_COUNT_MAX ;
 
 	return 0 ;
-}
+} /* mpeg_decoder_init */
 
 int
 mpeg_decoder_get_bitrate_mode (SF_PRIVATE *psf)
@@ -623,10 +629,10 @@ mpeg_decoder_get_bitrate_mode (SF_PRIVATE *psf)
 	return -1 ;
 } /* mpeg_decoder_get_bitrate_mode */
 
-#else /* ENABLE_EXPERIMENTAL_CODE && HAVE_MPEG */
+#else /* HAVE_MPEG */
 
 int mpeg_decoder_init (SF_PRIVATE *psf)
-{	psf_log_printf (psf, "This version of libsndfile was compiled without MP3 decode support.\n") ;
+{	psf_log_printf (psf, "This version of libsndfile was compiled without MPEG decode support.\n") ;
 	return SFE_UNIMPLEMENTED ;
 } /* mpeg_decoder_init */
 

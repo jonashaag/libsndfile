@@ -333,7 +333,7 @@ mp3_stereo_seek_test (const char * filename, int format)
 int
 main (void)
 {
-	if (ENABLE_EXPERIMENTAL_CODE && HAVE_MPEG)
+	if (HAVE_MPEG)
 	{	mp3_short_test () ;
 		mp3_int_test () ;
 		mp3_float_test () ;

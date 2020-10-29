@@ -67,7 +67,7 @@
 #include	"sndfile.h"
 #include	"common.h"
 
-#if ENABLE_EXPERIMENTAL_CODE && HAVE_MPEG
+#if HAVE_MPEG
 
 #include "mpeg.h"
 
@@ -162,7 +162,7 @@ mp3_command (SF_PRIVATE *psf, int command, void *data, int datasize)
 	return SF_FALSE ;
 } /* mpeg_command */
 
-#else /* ENABLE_EXPERIMENTAL_CODE && HAVE_MPEG*/
+#else /* HAVE_MPEG */
 
 int
 mp3_open (SF_PRIVATE *psf)

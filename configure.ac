@@ -153,7 +153,7 @@ AC_ARG_ENABLE([external-libs],
 	[AS_HELP_STRING([--disable-external-libs], [disable use of FLAC, Ogg and Vorbis [[default=no]]])])
 
 AC_ARG_ENABLE([mpeg],
-	[AS_HELP_STRING([--enable-mpeg], [enable LAME/MPG123 for MPEG (MP3) support (experimental) [[defaults=no]]])])
+	[AS_HELP_STRING([--disable-mpeg], [disable use of LAME/MPG123 for MPEG (MP3) [[defaults=no]]])])
 
 AC_ARG_ENABLE(octave,
 	[AS_HELP_STRING([--enable-octave], [enable building of GNU Octave module])])
@@ -404,32 +404,37 @@ HAVE_MPEG=0
 MPEG_CFLAGS=""
 MPEG_LIBS=""
 
-AS_IF([test "x$enable_experimental$enable_mpeg" = "xyesyes"], [
-		AC_CHECK_HEADER(lame/lame.h,
-						lame_header_found="yes",
-						lame_header_found="no")
-		AC_SEARCH_LIBS(lame_set_VBR_q, [lame mp3lame], [lame_lib_found="yes"], [lame_lib_found="no"])
-		AS_IF([test "x$lame_lib_found$lame_header_found" = "xyesyes"], [
-				ac_cv_lame="yes"
+AS_IF([test -n "$PKG_CONFIG"], [
+		AS_IF([test "x$enable_mpeg" = "xno"], [
+				AC_MSG_WARN([[*** MPEG (Lame/MPG123) disabled. ***]])
 			], [
-				AC_MSG_WARN([["Experimental MPEG support selected but external Lame library cannot be found.]])
-			])
+				AC_CHECK_HEADER(lame/lame.h,
+								lame_header_found="yes",
+								lame_header_found="no")
+				AC_SEARCH_LIBS(lame_set_VBR_q, [lame mp3lame], [lame_lib_found="yes"], [lame_lib_found="no"])
+				AS_IF([test "x$lame_lib_found$lame_header_found" = "xyesyes"], [
+						ac_cv_lame="yes"
+					], [
+						AC_MSG_WARN([["MPEG support selected but external Lame library cannot be found.]])
+					])
 
-		PKG_CHECK_MOD_VERSION([MPG123], [libmpg123 >= 1.26.0], [
-				ac_cv_mpg123="yes"
-			], [
-				AC_MSG_WARN([["Experimental MPEG support selected but external MPG123 library cannot be found.]])
-			])
+				PKG_CHECK_MOD_VERSION([MPG123], [libmpg123 >= 1.25.10], [
+						ac_cv_mpg123="yes"
+					], [
+						AC_MSG_WARN([["MPEG support selected but external MPG123 library cannot be found.]])
+					])
 
-		AS_IF([test "x$ac_cv_lame$ac_cv_mpg123" = "xyesyes"], [
-				HAVE_MPEG=1
-				MPEG_CFLAGS="$MPG123_CFLAGS"
-				MPEG_LIBS="$MPG123_LIBS"
-			], [
-				enable_mpeg="no"
-				AS_ECHO([""])
-				AC_MSG_WARN([[*** MPEG support disabled.]])
-				AS_ECHO([""])
+				AS_IF([test "x$ac_cv_lame$ac_cv_mpg123" = "xyesyes"], [
+						enable_mpeg="yes"
+						HAVE_MPEG=1
+						MPEG_CFLAGS="$MPG123_CFLAGS"
+						MPEG_LIBS="$MPG123_LIBS"
+					], [
+						enable_mpeg="no"
+						AS_ECHO([""])
+						AC_MSG_WARN([[*** MPEG support disabled.]])
+						AS_ECHO([""])
+					])
 			])
 	])
 

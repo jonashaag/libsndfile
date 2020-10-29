@@ -11,7 +11,7 @@ if (MPG123_INCLUDE_DIR)
 endif ()
 
 find_package (PkgConfig QUIET)
-pkg_check_modules(PC_MPG123 QUIET libmpg123>=1.26)
+pkg_check_modules(PC_MPG123 QUIET libmpg123>=1.25.10)
 
 set (MPG123_VERSION ${PC_MPG123_VERSION})
 
@@ -52,9 +52,9 @@ if (MPG123_FOUND)
 	set (MPG123_LIBRARIES ${MPG123_LIBRARY})
 	set (MPG123_INCLUDE_DIRS ${MPG123_INCLUDE_DIR})
 
-	if (NOT TARGET Mpg123::Mpg123)
-		add_library (Mpg123::Mpg123 UNKNOWN IMPORTED)
-		set_target_properties (Mpg123::Mpg123 PROPERTIES
+	if (NOT TARGET MPG123::libmpg123)
+		add_library (MPG123::libmpg123 UNKNOWN IMPORTED)
+		set_target_properties (MPG123::libmpg123 PROPERTIES
 			INTERFACE_INCLUDE_DIRECTORIES "${MPG123_INCLUDE_DIRS}"
 			IMPORTED_LOCATION "${MPG123_LIBRARIES}"
 		)

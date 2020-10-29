@@ -28,28 +28,28 @@ jobs:
             os: ubuntu-latest
             cc: gcc
             cxx: g++
-            autotools-options: --enable-werror --enable-experimental --enable-mpeg
+            autotools-options: --enable-werror
             build-system: autotools
 
           - name: ubuntu-clang-autotools
             os: ubuntu-latest
             cc: clang
             cxx: clang++
-            autotools-options: --enable-werror --enable-experimental --enable-mpeg
+            autotools-options: --enable-werror
             build-system: autotools
 
           - name: ubuntu-gcc-ossfuzz
             os: ubuntu-latest
             cc: gcc
             cxx: g++
-            autotools-options: --enable-werror --enable-experimental --enable-mpeg
+            autotools-options: --enable-werror
             build-system: ossfuzz
 
           - name: macos-autotools
             os: macos-latest
             cc: clang
             cxx: clang++
-            autotools-options: --enable-werror --enable-experimental --enable-mpeg
+            autotools-options: --enable-werror
             build-system: autotools
 
           - name: ubuntu-gcc-cmake
@@ -61,8 +61,6 @@ jobs:
             cmake-options: >-
               -DCMAKE_BUILD_TYPE=Release
               -DCMAKE_C_FLAGS="-Wall -Wextra"
-              -DENABLE_EXPERIMENTAL=ON
-              -DENABLE_MPEG=ON
               -DCMAKE_VERBOSE_MAKEFILE=ON
 
           - name: ubuntu-gcc-cmake-shared
@@ -75,8 +73,6 @@ jobs:
               -DCMAKE_BUILD_TYPE=Release
               -DBUILD_SHARED_LIBS=ON
               -DCMAKE_C_FLAGS="-Wall -Wextra"
-              -DENABLE_EXPERIMENTAL=ON
-              -DENABLE_MPEG=ON
               -DCMAKE_VERBOSE_MAKEFILE=ON
 
           - name: ubuntu-clang-cmake
@@ -88,8 +84,6 @@ jobs:
             cmake-options: >-
               -DCMAKE_BUILD_TYPE=Release
               -DCMAKE_C_FLAGS="-Wall -Wextra"
-              -DENABLE_EXPERIMENTAL=ON
-              -DENABLE_MPEG=ON
               -DCMAKE_VERBOSE_MAKEFILE=ON
 
           - name: ubuntu-clang-cmake-shared
@@ -102,8 +96,6 @@ jobs:
               -DCMAKE_BUILD_TYPE=Release
               -DBUILD_SHARED_LIBS=ON
               -DCMAKE_C_FLAGS="-Wall -Wextra"
-              -DENABLE_EXPERIMENTAL=ON
-              -DENABLE_MPEG=ON
               -DCMAKE_VERBOSE_MAKEFILE=ON
 
           - name: macos-cmake
@@ -115,8 +107,6 @@ jobs:
             cmake-options: >-
               -DCMAKE_BUILD_TYPE=Release
               -DCMAKE_C_FLAGS="-Wall -Wextra"
-              -DENABLE_EXPERIMENTAL=ON
-              -DENABLE_MPEG=ON
               -DCMAKE_VERBOSE_MAKEFILE=ON
 
           - name: macos-cmake-shared
@@ -129,8 +119,6 @@ jobs:
               -DCMAKE_BUILD_TYPE=Release
               -DBUILD_SHARED_LIBS=ON
               -DCMAKE_C_FLAGS="-Wall -Wextra"
-              -DENABLE_EXPERIMENTAL=ON
-              -DENABLE_MPEG=ON
               -DCMAKE_VERBOSE_MAKEFILE=ON
 
           - name: windows-vs2019-x64
@@ -143,8 +131,6 @@ jobs:
               -DCMAKE_BUILD_TYPE=Release
               -DVCPKG_TARGET_TRIPLET=x64-windows-static
               -DCMAKE_TOOLCHAIN_FILE=c:/vcpkg/scripts/buildsystems/vcpkg.cmake
-              -DENABLE_EXPERIMENTAL=ON
-              -DENABLE_MPEG=ON
 
           - name: windows-vs2019-x64-shared
             os: windows-latest
@@ -160,8 +146,6 @@ jobs:
               -DCMAKE_BUILD_TYPE=Release
               -DVCPKG_TARGET_TRIPLET=x64-windows-static
               -DCMAKE_TOOLCHAIN_FILE=c:/vcpkg/scripts/buildsystems/vcpkg.cmake
-              -DENABLE_EXPERIMENTAL=ON
-              -DENABLE_MPEG=ON
 
           - name: windows-vs2019-Win32
             os: windows-latest
@@ -174,8 +158,6 @@ jobs:
               -DCMAKE_BUILD_TYPE=Release
               -DVCPKG_TARGET_TRIPLET=x86-windows-static
               -DCMAKE_TOOLCHAIN_FILE=c:/vcpkg/scripts/buildsystems/vcpkg.cmake
-              -DENABLE_EXPERIMENTAL=ON
-              -DENABLE_MPEG=ON
 
           - name: windows-vs2019-Win32-shared
             os: windows-latest
@@ -189,8 +171,6 @@ jobs:
               -DBUILD_REGTEST=OFF
               -DBUILD_EXAMPLES=OFF
               -DINSTALL_PKGCONFIG_MODULE=OFF
-              -DENABLE_EXPERIMENTAL=ON
-              -DENABLE_MPEG=ON
               -DCPACK_PACKAGE_NAME=libsndfile
               -DCMAKE_BUILD_TYPE=Release
               -DVCPKG_TARGET_TRIPLET=x86-windows-static
@@ -208,7 +188,7 @@ jobs:
           brew update
           brew install autoconf automake libtool autogen libogg libvorbis flac opus sqlite3 speex lame mpg123
 
-      - name: Install Lunux dependencies
+      - name: Install Linux dependencies
         if: startsWith(matrix.os,'ubuntu')
         run: sudo apt-get install -y autogen ninja-build libogg-dev libvorbis-dev libflac-dev libopus-dev libasound2-dev libsqlite3-dev libspeex-dev libmp3lame-dev libmpg123-dev
 
