@@ -98,7 +98,7 @@ mpeg_dec_read_s (SF_PRIVATE *psf, short *ptr, sf_count_t len)
 
 		error = mpg123_read (pmp3d->pmh, ubuf.ucbuf, bufferlen * sizeof (float), &done) ;
 
-		if (error != MPG123_OK)
+		if (error != MPG123_OK && error != MPG123_DONE)
 		{	/* TODO: handle decoding error */
 			break ;
 			}
@@ -138,7 +138,7 @@ mpeg_dec_read_i (SF_PRIVATE *psf, int *ptr, sf_count_t len)
 
 		error = mpg123_read (pmp3d->pmh, ubuf.ucbuf, bufferlen * sizeof (float), &done) ;
 
-		if (error != MPG123_OK)
+		if (error != MPG123_OK && error != MPG123_DONE)
 			break ;
 
 		done /= sizeof (float) ;
@@ -161,7 +161,7 @@ mpeg_dec_read_f (SF_PRIVATE *psf, float *ptr, sf_count_t len)
 
 	error = mpg123_read (pmp3d->pmh, (unsigned char *) ptr, len * sizeof (float), &done) ;
 
-	if (error != MPG123_OK)
+	if (error != MPG123_OK && error != MPG123_DONE)
 		return 0 ;
 
 	done /= sizeof (float) ;
@@ -193,7 +193,7 @@ mpeg_dec_read_d (SF_PRIVATE *psf, double *ptr, sf_count_t len)
 	normfact = (psf->norm_double == SF_TRUE) ? 1.0 : (double) 0x8000 ;
 
 	error = mpg123_read (pmp3d->pmh, (unsigned char *) ptr, len * sizeof (float), &done) ;
-	if (error != MPG123_OK)
+	if (error != MPG123_OK && error != MPG123_DONE)
 		return 0 ;
 
 	done /= sizeof (float) ;
@@ -230,7 +230,7 @@ mpeg_dec_fill_sfinfo (mpg123_handle *mh, SF_INFO *info)
 	off_t length ;
 
 	error = mpg123_getformat (mh, &rate, &channels, &encoding) ;
-	if (error != MPG123_OK)
+	if (error != MPG123_OK && error != MPG123_DONE)
 		return error ;
 
 	info->samplerate = rate ;
